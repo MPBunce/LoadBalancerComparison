@@ -6,9 +6,9 @@ A performance comparison project implementing the same HTTP load balancer in bot
 
 ```
 load-balancer-comparison/
-├── c-loadbalancer/          # C implementation with socket-based networking
-├── go-loadbalancer/         # Go implementation using standard library
-├── test-backend/            # Simple HTTP backend servers for testing
+├── C-LoadBalancer/          # C implementation with socket-based networking
+├── Go-LoadBalancer/         # Go implementation using standard library
+├── TestBackend/             # Simple HTTP backend servers for testing
 ├── benchmarks/              # Load testing tools and configuration
 └── scripts/                 # Automation and comparison utilities
 ```
@@ -36,13 +36,19 @@ load-balancer-comparison/
 make all
 
 # Start test backend servers
-cd test-backend && ./start-backends.sh
+cd TestBackend && ./start-backends.sh
 
 # Run C load balancer
-./bin/c-loadbalancer -p 8080 -b backends.conf
+make run-c
+# OR manually: ./bin/C-LoadBalancer
 
-# Run Go load balancer
-./bin/go-loadbalancer -port 8080 -backends backends.conf
+# Run Go load balancer  
+make run-go
+# OR manually: ./bin/Go-LoadBalancer
+
+# Run test backend
+make run-backend
+# OR manually: ./bin/TestBackend
 
 # Run benchmarks
 make benchmark
