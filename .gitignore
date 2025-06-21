@@ -1,0 +1,70 @@
+# Binaries and executables
+bin/
+*/bin/
+C-LoadBalancer/bin/
+Go-LoadBalancer/bin/
+
+# C build artifacts
+*.o
+*.so
+*.a
+C-LoadBalancer/obj/
+*.dSYM/
+
+# Go build artifacts
+Go-LoadBalancer/Go-LoadBalancer
+*.exe
+
+# Go module cache and vendor
+go.sum
+vendor/
+
+# Debug and profiling files
+*.prof
+*.pprof
+*.trace
+core
+core.*
+vgcore.*
+
+# Test results and benchmarks
+benchmarks/results/
+*.test
+*.out
+*.log
+
+# Configuration files with sensitive data
+*.conf.local
+*.env
+.env.*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# Coverage reports
+*.cover
+*.coverprofile
+coverage.html
+
+# Docker artifacts
+.dockerignore
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
