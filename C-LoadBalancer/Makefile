@@ -36,6 +36,15 @@ $(DEBUG_TARGET): $(OBJECTS)
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Run targets
+run: $(TARGET)
+	@echo "Starting C Load Balancer..."
+	./$(TARGET)
+
+run-debug: $(DEBUG_TARGET)
+	@echo "Starting C Load Balancer (Debug)..."
+	./$(DEBUG_TARGET)
+
 # Install target (copies to parent bin directory)
 install: $(TARGET)
 	cp $(TARGET) ../bin/C-LoadBalancer
@@ -47,11 +56,13 @@ clean:
 # Show help
 help:
 	@echo "Available targets:"
-	@echo "  all     - Build production version"
-	@echo "  debug   - Build debug version with sanitizers"
-	@echo "  install - Copy binary to parent bin directory"
-	@echo "  clean   - Remove all build artifacts"
-	@echo "  help    - Show this help message"
+	@echo "  all       - Build production version"
+	@echo "  debug     - Build debug version with sanitizers"
+	@echo "  run       - Build and run production version"
+	@echo "  run-debug - Build and run debug version"
+	@echo "  install   - Copy binary to parent bin directory"
+	@echo "  clean     - Remove all build artifacts"
+	@echo "  help      - Show this help message"
 
 # Dependencies (basic dependency tracking)
 $(OBJDIR)/main.o: $(SRCDIR)/main.c $(SRCDIR)/loadbalancer.h
@@ -60,4 +71,4 @@ $(OBJDIR)/http_parser.o: $(SRCDIR)/http_parser.c $(SRCDIR)/loadbalancer.h
 $(OBJDIR)/proxy.o: $(SRCDIR)/proxy.c $(SRCDIR)/loadbalancer.h
 $(OBJDIR)/utils.o: $(SRCDIR)/utils.c $(SRCDIR)/loadbalancer.h
 
-.PHONY: all debug install clean help
+.PHONY: all debug run run-debug install clean help
