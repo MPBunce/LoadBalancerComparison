@@ -68,3 +68,5 @@ coverage.html
 .Trashes
 ehthumbs.db
 Thumbs.db
+TestBackend/test_backend
+Go-LoadBalancer/loadbalancer
