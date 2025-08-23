@@ -18,7 +18,7 @@ type LoadBalancer struct {
 // NewLoadBalancer creates a new load balancer instance
 func NewLoadBalancer(config *Config) *LoadBalancer {
 	algorithm := CreateAlgorithm(config.Algorithm)
-	
+
 	return &LoadBalancer{
 		config:     config,
 		serverPool: NewServerPool(algorithm),
@@ -34,7 +34,7 @@ func (lb *LoadBalancer) AddBackend(serverURL string, weight int) error {
 
 	// Customize the proxy error handler
 	backend.ReverseProxy.ErrorHandler = lb.createErrorHandler()
-	
+
 	lb.serverPool.AddBackend(backend)
 	return nil
 }
@@ -42,10 +42,14 @@ func (lb *LoadBalancer) AddBackend(serverURL string, weight int) error {
 // createErrorHandler creates a custom error handler for the reverse proxy
 func (lb *LoadBalancer) createErrorHandler() func(http.ResponseWriter, *http.Request, error) {
 	return func(writer http.ResponseWriter, request *http.Request, e error) {
-		log.Printf("Proxy error: %v", e)
-		
 		retries := getRetryFromContext(request)
+		log.Printf("[ERROR] Proxy error for %s: %v (attempt %d/%d)",
+			request.URL.Path, e, retries+1, lb.config.MaxRetries)
+
 		if retries < lb.config.MaxRetries {
+			log.Printf("[RETRY] Rerouting request %s due to backend error: %v",
+				request.URL.Path, e)
+
 			select {
 			case <-time.After(10 * time.Millisecond):
 				ctx := context.WithValue(request.Context(), retryKey, retries+1)
@@ -54,13 +58,14 @@ func (lb *LoadBalancer) createErrorHandler() func(http.ResponseWriter, *http.Req
 			return
 		}
 
-		log.Printf("Max retries exceeded for request to %s", request.URL.Path)
+		log.Printf("[FAIL] Max retries exceeded for request %s, returning 503", request.URL.Path)
 		http.Error(writer, "Service not available", http.StatusServiceUnavailable)
 	}
 }
 
 // Retry key for context
 type contextKey string
+
 const retryKey contextKey = "retry"
 
 // getRetryFromContext returns the retry count from context
@@ -73,22 +78,29 @@ func getRetryFromContext(r *http.Request) int {
 
 // loadBalance performs the load balancing
 func (lb *LoadBalancer) loadBalance(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	peer := lb.serverPool.NextPeer()
 	if peer != nil {
 		peer.AddConnection()
 		defer peer.RemoveConnection()
+
+		log.Printf("[REQUEST] %s %s routed to %s", r.Method, r.URL.Path, peer.URL.String())
+
 		peer.ReverseProxy.ServeHTTP(w, r)
+		log.Printf("[RESPONSE] %s %s served by %s in %v",
+			r.Method, r.URL.Path, peer.URL.String(), time.Since(start))
 		return
 	}
+	log.Printf("[FAIL] No available backend for %s %s", r.Method, r.URL.Path)
 	http.Error(w, "Service not available", http.StatusServiceUnavailable)
 }
 
 // healthCheck endpoint
 func (lb *LoadBalancer) healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	stats := lb.serverPool.GetStats()
-	
+
 	if err := json.NewEncoder(w).Encode(stats); err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -98,20 +110,20 @@ func (lb *LoadBalancer) healthCheck(w http.ResponseWriter, r *http.Request) {
 // stats endpoint
 func (lb *LoadBalancer) stats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	stats := lb.serverPool.GetStats()
-	
+
 	// Add additional runtime stats
 	extendedStats := map[string]interface{}{
 		"load_balancer": stats,
 		"config": map[string]interface{}{
-			"port":                 lb.config.Port,
+			"port":                  lb.config.Port,
 			"health_check_interval": lb.config.HealthCheckInterval,
-			"max_retries":          lb.config.MaxRetries,
+			"max_retries":           lb.config.MaxRetries,
 		},
 		"timestamp": time.Now().Unix(),
 	}
-	
+
 	if err := json.NewEncoder(w).Encode(extendedStats); err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -137,10 +149,10 @@ func (lb *LoadBalancer) Start() {
 	// Start health checking
 	go lb.healthChecking()
 
-	log.Printf("Load Balancer started at :%s", lb.config.Port)
-	log.Printf("Health checks: /health")
-	log.Printf("Statistics: /stats")
-	
+	log.Printf("[START] Load Balancer started at :%s", lb.config.Port)
+	log.Printf("[INFO] Health checks available at /health")
+	log.Printf("[INFO] Statistics available at /stats")
+
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
@@ -151,15 +163,15 @@ func (lb *LoadBalancer) healthChecking() {
 	interval := time.Duration(lb.config.HealthCheckInterval) * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	
+
 	// Initial health check
-	log.Println("Running initial health check...")
+	log.Println("[HEALTH] Running initial health check...")
 	lb.serverPool.HealthCheck()
-	
+
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("Running periodic health check...")
+			log.Println("[HEALTH] Running periodic health check...")
 			lb.serverPool.HealthCheck()
 		}
 	}

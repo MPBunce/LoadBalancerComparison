@@ -31,29 +31,44 @@ func main() {
 		if *baseDelay == 0 {
 			*baseDelay = 1 * time.Millisecond
 		}
+		if *maxDelay == 0 {
+			*maxDelay = 5 * time.Millisecond
+		}
 		if *payloadSize == 0 {
 			*payloadSize = 100
 		}
+
 	case "slow":
 		if *baseDelay == 0 {
-			*baseDelay = 100 * time.Millisecond
+			*baseDelay = 250 * time.Millisecond
 		}
 		if *maxDelay == 0 {
 			*maxDelay = 500 * time.Millisecond
 		}
+		if *payloadSize == 0 {
+			*payloadSize = 500 // moderate size
+		}
+
 	case "heavy":
 		if *payloadSize == 0 {
 			*payloadSize = 1024 * 1024 // 1MB
 		}
 		if *baseDelay == 0 {
-			*baseDelay = 50 * time.Millisecond
+			*baseDelay = 100 * time.Millisecond
 		}
+		if *maxDelay == 0 {
+			*maxDelay = 300 * time.Millisecond
+		}
+
 	case "failing":
 		if *errorRate == 0.0 {
-			*errorRate = 0.2 // 20% error rate
+			*errorRate = 0.35 // 35% error rate
 		}
 		if *baseDelay == 0 {
-			*baseDelay = 10 * time.Millisecond
+			*baseDelay = 20 * time.Millisecond
+		}
+		if *maxDelay == 0 {
+			*maxDelay = 50 * time.Millisecond
 		}
 	}
 
@@ -62,12 +77,7 @@ func main() {
 	// Setup routes
 	http.HandleFunc("/", backend.HandleRoot)
 	http.HandleFunc("/health", backend.HandleHealth)
-	http.HandleFunc("/fast", backend.HandleFast)
-	http.HandleFunc("/slow", backend.HandleSlow)
-	http.HandleFunc("/heavy", backend.HandleHeavy)
-	http.HandleFunc("/fail", backend.HandleFail)
 	http.HandleFunc("/info", backend.HandleInfo)
-	http.HandleFunc("/cpu", backend.HandleCPU)
 
 	addr := ":" + strconv.Itoa(*port)
 	log.Printf("Starting %s backend server on port %d", *backendType, *port)
@@ -76,5 +86,5 @@ func main() {
 	log.Printf("Visit http://localhost:%d for endpoint overview", *port)
 
 	log.Fatal(http.ListenAndServe(addr, nil))
-    
+
 }

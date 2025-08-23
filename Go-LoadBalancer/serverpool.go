@@ -28,7 +28,7 @@ func (s *ServerPool) AddBackend(backend *Backend) {
 	s.mux.Lock()
 	s.backends = append(s.backends, backend)
 	s.mux.Unlock()
-	log.Printf("Added backend: %s (weight: %d)", backend.URL.String(), backend.Weight)
+	log.Printf("[POOL] Added backend: %s (weight: %d)", backend.URL.String(), backend.Weight)
 }
 
 // NextPeer returns the next available backend
@@ -37,8 +37,21 @@ func (s *ServerPool) NextPeer() *Backend {
 	backends := make([]*Backend, len(s.backends))
 	copy(backends, s.backends)
 	s.mux.RUnlock()
-	
-	return s.algorithm.NextBackend(backends)
+
+	backend := s.algorithm.NextBackend(backends)
+	if backend == nil {
+		log.Printf("[POOL] No available backends")
+		return nil
+	}
+
+	if backend.IsAlive() {
+		log.Printf("[ROUTE] Redirecting request to backend: %s (connections: %d, weight: %d)",
+			backend.URL.String(), backend.GetConnections(), backend.Weight)
+	} else {
+		log.Printf("[ROUTE] Warning: chosen backend %s is DOWN, request may fail",
+			backend.URL.String())
+	}
+	return backend
 }
 
 // GetBackends returns a copy of the backends slice
@@ -53,24 +66,27 @@ func (s *ServerPool) GetBackends() []*Backend {
 // HealthCheck pings the backends and updates the status
 func (s *ServerPool) HealthCheck() {
 	backends := s.GetBackends()
-	
+
 	var wg sync.WaitGroup
 	for _, b := range backends {
 		wg.Add(1)
 		go func(backend *Backend) {
 			defer wg.Done()
+			start := time.Now()
 			alive := isBackendAlive(backend.URL)
+			latency := time.Since(start)
+
 			wasAlive := backend.IsAlive()
 			backend.SetAlive(alive)
-			
-			status := "up"
-			if !alive {
-				status = "down"
-			}
-			
-			// Only log if status changed
+
+			status := map[bool]string{true: "UP", false: "DOWN"}[alive]
+
 			if alive != wasAlive {
-				log.Printf("Backend %s status changed: %s", backend.URL.String(), status)
+				log.Printf("[HEALTH] Backend %s status changed: %s (latency: %v)",
+					backend.URL.String(), status, latency)
+			} else {
+				log.Printf("[HEALTH] Backend %s check: %s (latency: %v)",
+					backend.URL.String(), status, latency)
 			}
 		}(b)
 	}
@@ -80,31 +96,31 @@ func (s *ServerPool) HealthCheck() {
 // GetStats returns statistics about the server pool
 func (s *ServerPool) GetStats() map[string]interface{} {
 	backends := s.GetBackends()
-	
+
 	stats := map[string]interface{}{
 		"algorithm":      s.algorithm.Name(),
 		"total_backends": len(backends),
 		"alive_backends": 0,
 		"backends":       make([]map[string]interface{}, 0),
 	}
-	
+
 	aliveCount := 0
 	for _, backend := range backends {
 		alive := backend.IsAlive()
 		if alive {
 			aliveCount++
 		}
-		
+
 		backendInfo := map[string]interface{}{
 			"url":         backend.URL.String(),
 			"status":      map[bool]string{true: "up", false: "down"}[alive],
 			"connections": backend.GetConnections(),
 			"weight":      backend.Weight,
 		}
-		
+
 		stats["backends"] = append(stats["backends"].([]map[string]interface{}), backendInfo)
 	}
-	
+
 	stats["alive_backends"] = aliveCount
 	return stats
 }
