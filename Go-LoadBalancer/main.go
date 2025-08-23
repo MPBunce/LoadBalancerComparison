@@ -23,6 +23,7 @@ func main() {
 		{URL: "http://localhost:3003", Weight: 3},
 		{URL: "http://localhost:3004", Weight: 4},
 		{URL: "http://localhost:3005", Weight: 5},
+		{URL: "http://localhost:3006", Weight: 6},
 	}
 
 	for _, backend := range backends {
