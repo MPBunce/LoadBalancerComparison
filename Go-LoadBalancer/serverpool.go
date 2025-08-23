@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"net"
+	"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -127,11 +127,19 @@ func (s *ServerPool) GetStats() map[string]interface{} {
 
 // isBackendAlive checks whether a backend is alive by establishing a TCP connection
 func isBackendAlive(u *url.URL) bool {
-	timeout := 2 * time.Second
-	conn, err := net.DialTimeout("tcp", u.Host, timeout)
+	client := http.Client{
+		Timeout: 2 * time.Second,
+	}
+
+	resp, err := client.Get(u.String())
 	if err != nil {
 		return false
 	}
-	defer conn.Close()
-	return true
+	defer resp.Body.Close()
+
+	// Consider only 2xx status codes as alive
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return true
+	}
+	return false
 }

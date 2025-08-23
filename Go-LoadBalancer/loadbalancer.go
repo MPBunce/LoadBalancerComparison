@@ -39,26 +39,29 @@ func (lb *LoadBalancer) AddBackend(serverURL string, weight int) error {
 	return nil
 }
 
-// createErrorHandler creates a custom error handler for the reverse proxy
 func (lb *LoadBalancer) createErrorHandler() func(http.ResponseWriter, *http.Request, error) {
 	return func(writer http.ResponseWriter, request *http.Request, e error) {
 		retries := getRetryFromContext(request)
-		log.Printf("[ERROR] Proxy error for %s: %v (attempt %d/%d)",
-			request.URL.Path, e, retries+1, lb.config.MaxRetries)
+
+		// Log the error
+		log.Printf(
+			"[ERROR] %s %s from %s → backend %s failed: %v (attempt %d/%d)",
+			request.Method, request.URL.Path, request.RemoteAddr,
+			request.Host, e, retries+1, lb.config.MaxRetries,
+		)
 
 		if retries < lb.config.MaxRetries {
-			log.Printf("[RETRY] Rerouting request %s due to backend error: %v",
-				request.URL.Path, e)
-
-			select {
-			case <-time.After(10 * time.Millisecond):
-				ctx := context.WithValue(request.Context(), retryKey, retries+1)
-				lb.loadBalance(writer, request.WithContext(ctx))
-			}
+			log.Printf(
+				"[RETRY] Rerouting %s %s due to backend error, attempt %d/%d",
+				request.Method, request.URL.Path, retries+1, lb.config.MaxRetries,
+			)
+			time.Sleep(10 * time.Millisecond)
+			ctx := context.WithValue(request.Context(), retryKey, retries+1)
+			lb.loadBalance(writer, request.WithContext(ctx))
 			return
 		}
 
-		log.Printf("[FAIL] Max retries exceeded for request %s, returning 503", request.URL.Path)
+		log.Printf("[FAIL] Max retries exceeded for %s %s, returning 503", request.Method, request.URL.Path)
 		http.Error(writer, "Service not available", http.StatusServiceUnavailable)
 	}
 }
@@ -76,22 +79,35 @@ func getRetryFromContext(r *http.Request) int {
 	return 0
 }
 
-// loadBalance performs the load balancing
 func (lb *LoadBalancer) loadBalance(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	peer := lb.serverPool.NextPeer()
+	clientIP := r.RemoteAddr
+
 	if peer != nil {
 		peer.AddConnection()
 		defer peer.RemoveConnection()
 
-		log.Printf("[REQUEST] %s %s routed to %s", r.Method, r.URL.Path, peer.URL.String())
+		// Detailed request log
+		log.Printf(
+			"[ROUTE] %s %s from %s → backend %s (connections=%d, weight=%d)",
+			r.Method, r.URL.Path, clientIP,
+			peer.URL.String(),
+			peer.GetConnections(),
+			peer.Weight,
+		)
 
 		peer.ReverseProxy.ServeHTTP(w, r)
-		log.Printf("[RESPONSE] %s %s served by %s in %v",
-			r.Method, r.URL.Path, peer.URL.String(), time.Since(start))
+
+		// Response log with time
+		log.Printf(
+			"[RESPONSE] %s %s served by %s in %v",
+			r.Method, r.URL.Path, peer.URL.String(), time.Since(start),
+		)
 		return
 	}
-	log.Printf("[FAIL] No available backend for %s %s", r.Method, r.URL.Path)
+
+	log.Printf("[FAIL] No available backend for %s %s from %s", r.Method, r.URL.Path, clientIP)
 	http.Error(w, "Service not available", http.StatusServiceUnavailable)
 }
 
@@ -168,11 +184,8 @@ func (lb *LoadBalancer) healthChecking() {
 	log.Println("[HEALTH] Running initial health check...")
 	lb.serverPool.HealthCheck()
 
-	for {
-		select {
-		case <-ticker.C:
-			log.Println("[HEALTH] Running periodic health check...")
-			lb.serverPool.HealthCheck()
-		}
+	for range ticker.C {
+		log.Println("[HEALTH] Running periodic health check...")
+		lb.serverPool.HealthCheck()
 	}
 }

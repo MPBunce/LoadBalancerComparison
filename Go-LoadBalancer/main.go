@@ -10,7 +10,7 @@ func main() {
 		Port:                "3030",
 		HealthCheckInterval: 30, // seconds
 		MaxRetries:          3,
-		Algorithm:           "weighted", // "round-robin", "weighted", "least-connections"
+		Algorithm:           "round-robin", // "round-robin", "weighted", "least-connections"
 	}
 
 	// Create load balancer
