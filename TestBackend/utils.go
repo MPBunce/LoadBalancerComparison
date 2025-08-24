@@ -1,3 +1,4 @@
+// utils.go
 package main
 
 import "net/http"
@@ -21,4 +22,8 @@ func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
 	n, err := lrw.ResponseWriter.Write(b)
 	lrw.size += n
 	return n, err
+}
+
+func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
+	return &loggingResponseWriter{ResponseWriter: w}
 }

@@ -1,3 +1,4 @@
+// backend.go
 package main
 
 import (
@@ -17,9 +18,13 @@ type Backend struct {
 	RequestCount int64
 	StartTime    time.Time
 	Hostname     string
+
+	// New fields for controlled testing
+	FailureMode *FailureMode
+	IsHealthy   bool // Manual health toggle
 }
 
-func NewBackend(port int, backendType string, baseDelay, maxDelay time.Duration, 
+func NewBackend(port int, backendType string, baseDelay, maxDelay time.Duration,
 	payloadSize int, errorRate float64, hostname string) *Backend {
 	return &Backend{
 		Port:        port,
@@ -30,6 +35,8 @@ func NewBackend(port int, backendType string, baseDelay, maxDelay time.Duration,
 		ErrorRate:   errorRate,
 		StartTime:   time.Now(),
 		Hostname:    hostname,
+		IsHealthy:   true, // Start healthy by default
+		FailureMode: nil,  // Start without failure mode
 	}
 }
 
@@ -58,4 +65,19 @@ func (b *Backend) GetRequestCount() int64 {
 
 func (b *Backend) GetUptime() time.Duration {
 	return time.Since(b.StartTime)
+}
+
+func (b *Backend) shouldFailRequest() bool {
+	if b.FailureMode == nil {
+		return b.ShouldFail() // Original behavior
+	}
+
+	if b.FailureMode.RequestsFail {
+		if b.FailureMode.PartialFailure > 0 {
+			return rand.Float64() < b.FailureMode.PartialFailure
+		}
+		return true
+	}
+
+	return b.ShouldFail() // Fallback to original behavior
 }

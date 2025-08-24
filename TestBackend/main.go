@@ -1,3 +1,4 @@
+// main.go
 package main
 
 import (
@@ -11,12 +12,13 @@ import (
 
 func main() {
 	var (
-		port        = flag.Int("port", 3000, "Port to listen on")
-		backendType = flag.String("type", "balanced", "Backend type (fast, slow, heavy, failing, balanced)")
-		baseDelay   = flag.Duration("delay", 0, "Base delay for responses (e.g., 100ms)")
-		maxDelay    = flag.Duration("max-delay", 0, "Maximum delay for variable responses (e.g., 500ms)")
-		payloadSize = flag.Int("size", 0, "Payload size in bytes for heavy endpoints")
-		errorRate   = flag.Float64("error-rate", 0.0, "Error rate (0.0 to 1.0)")
+		port         = flag.Int("port", 3000, "Port to listen on")
+		backendType  = flag.String("type", "balanced", "Backend type (fast, slow, heavy, failing, balanced, controllable)")
+		baseDelay    = flag.Duration("delay", 0, "Base delay for responses (e.g., 100ms)")
+		maxDelay     = flag.Duration("max-delay", 0, "Maximum delay for variable responses (e.g., 500ms)")
+		payloadSize  = flag.Int("size", 0, "Payload size in bytes for heavy endpoints")
+		errorRate    = flag.Float64("error-rate", 0.0, "Error rate (0.0 to 1.0)")
+		startHealthy = flag.Bool("healthy", true, "Start in healthy state")
 	)
 	flag.Parse()
 
@@ -46,7 +48,7 @@ func main() {
 			*maxDelay = 500 * time.Millisecond
 		}
 		if *payloadSize == 0 {
-			*payloadSize = 500 // moderate size
+			*payloadSize = 500
 		}
 
 	case "heavy":
@@ -62,7 +64,7 @@ func main() {
 
 	case "failing":
 		if *errorRate == 0.0 {
-			*errorRate = 0.35 // 35% error rate
+			*errorRate = 0.95 // 35% error rate
 		}
 		if *baseDelay == 0 {
 			*baseDelay = 20 * time.Millisecond
@@ -70,21 +72,35 @@ func main() {
 		if *maxDelay == 0 {
 			*maxDelay = 50 * time.Millisecond
 		}
+
+	case "controllable":
+		// Start with balanced defaults but allow runtime control
+		if *baseDelay == 0 {
+			*baseDelay = 50 * time.Millisecond
+		}
+		if *maxDelay == 0 {
+			*maxDelay = 100 * time.Millisecond
+		}
+		if *payloadSize == 0 {
+			*payloadSize = 200
+		}
 	}
 
 	backend := NewBackend(*port, *backendType, *baseDelay, *maxDelay, *payloadSize, *errorRate, hostname)
+	backend.IsHealthy = *startHealthy
 
 	// Setup routes
 	http.HandleFunc("/", backend.HandleRoot)
 	http.HandleFunc("/health", backend.HandleHealth)
 	http.HandleFunc("/info", backend.HandleInfo)
+	http.HandleFunc("/control", backend.HandleControl) // New control endpoint
 
 	addr := ":" + strconv.Itoa(*port)
 	log.Printf("Starting %s backend server on port %d", *backendType, *port)
-	log.Printf("Config: delay=%v, max-delay=%v, payload=%d bytes, error-rate=%.1f%%",
-		*baseDelay, *maxDelay, *payloadSize, *errorRate*100)
+	log.Printf("Config: delay=%v, max-delay=%v, payload=%d bytes, error-rate=%.1f%%, healthy=%v",
+		*baseDelay, *maxDelay, *payloadSize, *errorRate*100, *startHealthy)
 	log.Printf("Visit http://localhost:%d for endpoint overview", *port)
+	log.Printf("Use POST /control to change behavior during testing")
 
 	log.Fatal(http.ListenAndServe(addr, nil))
-
 }
