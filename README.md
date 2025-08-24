@@ -9,7 +9,6 @@ load-balancer-comparison/
 ├── C-LoadBalancer/          # C implementation with socket-based networking
 ├── Go-LoadBalancer/         # Go implementation using standard library
 ├── TestBackend/             # Simple HTTP backend servers for testing
-├── benchmarks/              # Load testing tools and configuration
 └── scripts/                 # Automation and comparison utilities
 ```
 
@@ -33,7 +32,7 @@ load-balancer-comparison/
 
 ```bash
 # Build everything
-make all
+make build
 
 # Start test backend servers
 cd TestBackend && ./start-backends.sh
